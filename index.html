@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="UTF-8" />
+		<link rel="icon" type="image/svg+xml" href="/vite.svg" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>Online Quiz App</title>
+
+		<link rel="stylesheet" href="index.css" />
+	</head>
+	<body>
+		<div class="w-[60rem] mx-auto space-y-5">
+			<div class="border-2 space-y-5 py-5 mx-auto mt-16 rounded-lg">
+				<h1 class="text-3xl font-bold text-center">Online Quiz App</h1>
+				<div class="space-y-2">
+					<h3 class="text-center font-semibold">Select category</h3>
+					<div class="mx-auto w-fit space-x-4">
+						<input
+							type="button"
+							id="science"
+							class="category cursor-pointer px-4 py-2 bg-zinc-800 text-white rounded font-medium"
+							value="Science"
+						/>
+						<input
+							type="button"
+							id="math"
+							class="category cursor-pointer px-4 py-2 text-black hover:bg-zinc-200 rounded font-medium"
+							value="Math"
+						/>
+						<input
+							type="button"
+							id="history"
+							class="category cursor-pointer px-4 py-2 text-black rounded hover:bg-zinc-200 font-medium"
+							value="History"
+						/>
+					</div>
+				</div>
+			</div>
+			<div class="border-2 space-y-8 rounded-lg px-10 py-5" id="pop">
+				<div class="w-fit mx-auto">
+					<ul
+						class="flex gap-2 *:w-2.5 *:cursor-pointer *:aspect-square *:rounded-full"
+					>
+						<li class="bar bg-zinc-800"></li>
+						<li class="bar bg-zinc-200"></li>
+						<li class="bar bg-zinc-200"></li>
+						<li class="bar bg-zinc-200"></li>
+						<li class="bar bg-zinc-200"></li>
+					</ul>
+				</div>
+				<div class="space-y-3">
+					<h2 class="text-xl font-bold flex gap-2">
+						<p>Q)</p>
+						<p class="ani h-10 w-full" id="question"></p>
+					</h2>
+					<ul id="choices" class="text-left space-y-2 pl-14">
+						<li
+							class="choice ani before:absolute h-8 w-5/12 cursor-pointer relative text-lg before:-left-8 before:top-1/2 before:-translate-y-1/2 before:w-3 before:aspect-square before:border-zinc-800 before:border-2 before:rounded-full"
+						></li>
+						<li
+							class="choice before:absolute h-8 w-4/12 ani cursor-pointer relative text-lg before:-left-8 before:top-1/2 before:-translate-y-1/2 before:w-3 before:aspect-square before:border-zinc-800 before:border-2 text-nowrap before:rounded-full"
+						></li>
+						<li
+							class="choice before:absolute h-8 w-5/12 ani cursor-pointer relative text-lg before:-left-8 before:top-1/2 before:-translate-y-1/2 before:w-3 before:aspect-square before:border-zinc-800 before:border-2 text-nowrap before:rounded-full"
+						></li>
+						<li
+							class="choice before:absolute h-8 w-4/12 ani cursor-pointer relative text-lg before:-left-8 before:top-1/2 before:-translate-y-1/2 before:w-3 before:aspect-square before:border-zinc-800 before:border-2 text-nowrap before:rounded-full"
+						></li>
+					</ul>
+
+					<div class="flex mt-3 justify-end gap-4">
+						<button
+							class="cursor-pointer px-4 py-2 rounded font-medium bg-zinc-800 text-white"
+							id="next"
+						>
+							Next
+						</button>
+					</div>
+				</div>
+			</div>
+		</div>
+
+		<script type="module" defer>
+			import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+			import { getAnalytics } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-analytics.js";
+
+			import { getAuth } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+			import {
+				getFirestore,
+				getDocs,
+				query,
+				collection,
+			} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+			/**
+			 * @typedef {Object} Question
+			 * @property {string} question
+			 * @property {string[]} choices
+			 * @property {number} correctIndex
+			 */
+
+			const firebaseConfig = {
+				apiKey: "AIzaSyAXe-Y9dn6JnxJdcuJ4yTBsqtRBqJj-sCo",
+				authDomain: "online-quiz-app-7aba9.firebaseapp.com",
+				projectId: "online-quiz-app-7aba9",
+				storageBucket: "online-quiz-app-7aba9.appspot.com",
+				messagingSenderId: "490447981553",
+				appId: "1:490447981553:web:760ceb8411e73090af9250",
+				measurementId: "G-WB6RRZBK8Z",
+			};
+
+			const app = initializeApp(firebaseConfig);
+			const analytics = getAnalytics(app);
+
+			const firestore = getFirestore(app);
+
+			let currentQuestion = 0;
+			let answerIndex = -1;
+
+			const next = document.getElementById("next");
+
+			const category = Array.from(
+				document.getElementsByClassName("category")
+			);
+
+			let isEnd = false;
+
+			const bar = Array.from(document.getElementsByClassName("bar"));
+
+			/**
+			 * @type {"science" | "maths" | "history"}
+			 */
+			let currentCategory = "science";
+
+			const categoryQuestion = {
+				science: [],
+				maths: [],
+				history: [],
+			};
+
+			const answers = {
+				science: [-1, -1, -1, -1, -1],
+				maths: [-1, -1, -1, -1, -1],
+				history: [-1, -1, -1, -1, -1],
+			};
+
+			/**
+			 * @param choice {Question["choices"][number]}
+			 */
+			function createChoice(choice, index) {
+				const cho = document.createElement("li");
+				cho.textContent = choice;
+				cho.classList.add(
+					"choice",
+					"before:absolute",
+					"cursor-pointer",
+					"relative",
+					"text-lg",
+					"font-semibold",
+					"before:-left-8",
+					"before:top-1/2",
+					"before:-translate-y-1/2",
+					"before:w-4",
+					"before:aspect-square",
+					"before:border-zinc-800",
+					"before:border",
+					"text-nowrap",
+					"before:rounded-full"
+				);
+
+				cho.addEventListener("click", (event) => {
+					const c = Array.from(
+						document.getElementsByClassName("choice")
+					);
+
+					c.forEach((ch) => {
+						ch.classList.remove("before:border-4");
+						ch.classList.add("before:border");
+					});
+
+					answers[currentCategory][currentQuestion - 1] =
+						answerIndex = index;
+
+					event.currentTarget.classList.add("before:border-4");
+					event.currentTarget.classList.remove("before:border");
+				});
+
+				return cho;
+			}
+
+			function createQuestion() {
+				/** @type {Question[]} */
+				const question = categoryQuestion[currentCategory];
+
+				const que = document.getElementById("question");
+				const choices = document.getElementById("choices");
+
+				que.classList.remove("ani", "h-10");
+
+				que.textContent = question[currentQuestion].question;
+				choices.innerHTML = "";
+
+				question[currentQuestion].choices.forEach((choice, index) => {
+					choices.appendChild(createChoice(choice, index));
+				});
+
+				currentQuestion++;
+			}
+
+			function endQuiz() {
+				const h3 = (t) =>
+					`<h3 class="text-xl mt-4 font-bold">Q) ${t}</h3>`;
+				const h4 = (t) =>
+					`<h4 class="text-lg font-semibold pl-7">${t}</h4>`;
+
+				document.getElementById("pop").innerHTML = `
+				<div class="overflow-y-scroll h-96">
+					<div class="flex gap-3 mt-3">
+						<h2 class="text-2xl text-left font-semibold">
+							Your score ${
+								answers[currentCategory].filter(
+									(element, index) =>
+										element ===
+										categoryQuestion[currentCategory][
+											index
+										]["correct Answer"]
+								).length
+							}/5
+						</h2>
+						<button
+							class="bg-zinc-800 text-white px-4 py-1 rounded"
+							id="restart"
+							onclick="location.reload()"
+						>
+							Restart
+						</button>
+					</div>
+					${categoryQuestion[currentCategory]
+						.map(
+							(q, index) =>
+								h3(q.question) +
+								h4(q.choices[answers[currentCategory][index]])
+						)
+						.join("")}
+				</div>`;
+			}
+
+			function nextQuestion() {
+				if (isEnd) {
+					isEnd = false;
+					endQuiz();
+					return;
+				}
+
+				if (
+					currentQuestion <
+						categoryQuestion[currentCategory].length &&
+					answers[currentCategory][currentQuestion - 1] !== -1
+				) {
+					bar.forEach((element) => {
+						element.classList.remove("bg-zinc-800");
+						element.classList.add("bg-zinc-200");
+					});
+
+					bar[currentQuestion].classList.add("bg-zinc-800");
+
+					createQuestion();
+				}
+
+				if (
+					currentQuestion === categoryQuestion[currentCategory].length
+				) {
+					isEnd = true;
+					next.textContent = "Finish";
+				}
+			}
+
+			/**
+			 * @param category {"science" | "maths" | "history"}
+			 */
+			function switchCategory(category) {
+				currentCategory = category;
+				currentQuestion = 0;
+
+				answers[category] = [-1, -1, -1, -1, -1];
+
+				answerIndex = -1;
+
+				createQuestion();
+			}
+
+			/**
+			 * @param category {"science" | "maths" | "history"}
+			 */
+			async function question(category) {
+				/** @type {Question[]} */
+				const questionsArray = [];
+
+				const querySnapshot = await getDocs(
+					query(collection(firestore, category))
+				);
+
+				querySnapshot.forEach((que) => {
+					questionsArray.push(que.data());
+				});
+
+				return questionsArray;
+			}
+
+			Promise.all([
+				question("science"),
+				question("maths"),
+				question("history"),
+			]).then((data) => {
+				category.forEach((element, index) => {
+					element.addEventListener("click", (event) => {
+						if (index === 0) switchCategory("science");
+						else if (index === 1) switchCategory("maths");
+						else if (index === 2) switchCategory("history");
+
+						category.forEach((element) => {
+							element.classList.remove(
+								"bg-zinc-800",
+								"text-white"
+							);
+							element.classList.add("hover:bg-zinc-200");
+						});
+
+						event.currentTarget.classList.add(
+							"bg-zinc-800",
+							"text-white"
+						);
+						event.currentTarget.classList.remove(
+							"hover:bg-zinc-200"
+						);
+					});
+				});
+
+				next.addEventListener("click", nextQuestion);
+
+				categoryQuestion.science = data[0];
+				categoryQuestion.maths = data[1];
+				categoryQuestion.history = data[2];
+
+				console.log(categoryQuestion.science);
+
+				createQuestion();
+			});
+		</script>
+	</body>
+</html>
